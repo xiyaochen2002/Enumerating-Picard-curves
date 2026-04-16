@@ -1,0 +1,3 @@
+Using 8 threads
+Beginning scan of 4116 of 4116 (2^12.01, 10^3.61) curve equations with |f_i| <= 3...
+Found 3995 of 4116 curves with smooth discriminant in 3.435 secs using 8 threads (6677321.7 ns/curve)

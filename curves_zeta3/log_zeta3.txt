@@ -1,0 +1,3 @@
+Using 8 threads
+Scanning 15625 curves with |ai|,|bi| <= 2, N(disc) <= 1000000...
+Found 2987 curves in 2.389 secs using 8 threads

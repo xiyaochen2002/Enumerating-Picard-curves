@@ -1,0 +1,24 @@
+# Compiled binaries
+curves/pdisc_box
+curves_zeta3/pdisc_box_zeta3
+
+# Large third-party source archives
+gmp-6.3.0/
+ff_poly_v1.2.7/
+ff_poly_v2.0.0/
+smalljac_v4.1.3/
+*.tar
+*.tar.xz
+*.zip
+
+# PDF (copyright)
+*.pdf
+
+# Log / temp
+*.log
+smalldisc.log
+Fw_*/
+curves/mpoly128/
+
+# Visual Studio workspace files
+.vs/

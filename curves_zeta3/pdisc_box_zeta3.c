@@ -154,6 +154,10 @@ int main(int argc, char *argv[])
     long cnt   = 0;
     double t0  = get_time();
 
+    fprintf(stdout, "# Picard curves over Q(zeta_3):  y^3 = f(x),  f(x) = x^4 + (a2+b2*w)*x^2 + (a1+b1*w)*x + (a0+b0*w),  w = e^(2*pi*i/3)\n");
+    fprintf(stdout, "# Output format:  N(disc(f)):[a0,b0,a1,b1,a2,b2]  where  N(disc(f)) = disc_re^2 - disc_re*disc_im + disc_im^2\n");
+    fflush(stdout);
+
     /*
      * Parallelise over the two outermost loops (a2, b2).
      * Inner four loops run sequentially per thread.

@@ -122,7 +122,11 @@ int main (int argc, char *argv[])
     
     cnt = 0;
     start = get_time();
-    
+
+    fprintf(stdout, "# Picard curves y^3 = f(x),  f(x) = f4*x^4 + f3*x^3 + f2*x^2 + f1*x + f0  (7-smooth disc(f) filter)\n");
+    fprintf(stdout, "# Output format:  Delta:[f(x)]  where  Delta = 3^9 * f4^3 * disc(f)^2\n");
+    fflush(stdout);
+
     #pragma omp parallel num_threads(threads)
     {
         mpoly128_t mpoly;

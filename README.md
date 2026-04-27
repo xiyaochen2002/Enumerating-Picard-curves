@@ -25,7 +25,7 @@ f(x) = f4·x⁴ + f3·x³ + f2·x² + f1·x + f0
 
 in a coefficient box `|fi| ≤ c`, whose **discriminant** is small.
 
-The discriminant of the Picard curve `y³ = f(x)` is
+The discriminant formula that we use of the Picard curve `y³ = f(x)` is
 
 ```
 Δ = 3⁹ · f4³ · disc(f)²

@@ -3,6 +3,8 @@
 This project enumerates Picard curves with small discriminant, both over **Q** (the rationals)
 and over **Q(ζ₃)** (the Eisenstein integers).
 
+The implementation over **Q** is based on code originally written by Professor Andrew Sutherland (MIT).
+
 A **Picard curve** is a genus-3 curve of the form
 
 ```

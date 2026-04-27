@@ -10,9 +10,9 @@
  * norm  N(disc(f)) = disc_re^2 - disc_re*disc_im + disc_im^2  satisfies
  * 0 < N(disc(f)) <= norm_bound.
  *
- * Discriminant formulas come from norm_of_disc.ipynb:
- *   disc(x^4 + x2*x^2 + x1*x + x0) over Z[omega],  xi = ai + bi*omega
- *   gives disc_re and disc_im as explicit polynomials in (a0,b0,a1,b1,a2,b2).
+ * disc(x^4 + c2*x^2 + c1*x + c0)  is computed directly in Z[omega] using
+ * the 6-term monic depressed quartic formula:
+ *   256*c0^3 - 128*c2^2*c0^2 + 144*c2*c1^2*c0 - 27*c1^4 + 16*c2^4*c0 - 4*c2^3*c1^2
  *
  * When all bi = 0 these reduce to the classical rational discriminant
  *   256*a0^3 - 128*a0^2*a2^2 + 144*a0*a1^2*a2 - 27*a1^4 + 16*a0*a2^4 - 4*a1^2*a2^3
@@ -34,86 +34,40 @@
 #include <omp.h>
 #include "../curves/cstd.h"
 
+typedef __int128_t i128;
 
-/* -----------------------------------------------------------------------
- * Real part of disc(x^4 + c2*x^2 + c1*x + c0)  over Z[omega],
- * where ci = ai + bi*omega.
- * All arithmetic in __int128_t to avoid overflow (coeffs fit in long,
- * but degree-5 products can reach ~c^5, and we need exact values).
- * ----------------------------------------------------------------------- */
-static inline __int128_t
-disc_re(__int128_t a0, __int128_t b0,
-        __int128_t a1, __int128_t b1,
-        __int128_t a2, __int128_t b2)
-{
-    return
-        /* a2/b2 degree-5 terms */
-        -4*a1*a1*a2*a2*a2   + 4*b1*b1*a2*a2*a2
-        + 16*a0*a2*a2*a2*a2
-        + 24*a1*b1*a2*a2*b2 - 12*b1*b1*a2*a2*b2
-        - 64*b0*a2*a2*a2*b2
-        + 12*a1*a1*a2*b2*b2 - 24*a1*b1*a2*b2*b2
-        - 96*a0*a2*a2*b2*b2 + 96*b0*a2*a2*b2*b2
-        - 4*a1*a1*b2*b2*b2  + 4*b1*b1*b2*b2*b2
-        + 64*a0*a2*b2*b2*b2
-        - 16*b0*b2*b2*b2*b2
-        /* a1/b1 degree-4 terms */
-        - 27*a1*a1*a1*a1 + 162*a1*a1*b1*b1 - 108*a1*b1*b1*b1
-        /* mixed degree-4 terms */
-        + 144*a0*a1*a1*a2   - 144*a0*b1*b1*a2
-        - 128*a0*a0*a2*a2   + 128*b0*b0*a2*a2
-        - 144*b0*a1*a1*b2   + 144*b0*b1*b1*b2
-        + 128*a0*a0*b2*b2   - 128*b0*b0*b2*b2
-        /* a0/b0 degree-3 terms (from 256*x0^3) */
-        + 256*a0*a0*a0 - 768*a0*b0*b0 + 256*b0*b0*b0
-        /* degree-3 cross terms */
-        + 256*a0*b0*b2 - 128*b0*b0*b2
-        - 288*a1*b1*b2 + 144*b1*b1*b2;
+/* Z[omega] element: re + im*omega,  omega^2 = -omega - 1 */
+typedef struct { i128 re, im; } zw_t;
+
+static inline zw_t zw_mul(zw_t x, zw_t y) {
+    return (zw_t){ x.re*y.re - x.im*y.im,
+                   x.re*y.im + x.im*y.re - x.im*y.im };
 }
+static inline zw_t zw_add(zw_t x, zw_t y) { return (zw_t){ x.re+y.re, x.im+y.im }; }
+static inline zw_t zw_sub(zw_t x, zw_t y) { return (zw_t){ x.re-y.re, x.im-y.im }; }
+static inline zw_t zw_smul(i128 s, zw_t x) { return (zw_t){ s*x.re, s*x.im }; }
+
+/* N(a + b*omega) = a^2 - a*b + b^2 */
+static inline i128 zw_norm(zw_t x) { return x.re*x.re - x.re*x.im + x.im*x.im; }
 
 
 /* -----------------------------------------------------------------------
- * Imaginary part (omega-coefficient) of disc(x^4 + c2*x^2 + c1*x + c0).
+ * disc(x^4 + c2*x^2 + c1*x + c0) over Z[omega]
+ * = 256*c0^3 - 128*c2^2*c0^2 + 144*c2*c1^2*c0 - 27*c1^4 + 16*c2^4*c0 - 4*c2^3*c1^2
  * ----------------------------------------------------------------------- */
-static inline __int128_t
-disc_im(__int128_t a0, __int128_t b0,
-        __int128_t a1, __int128_t b1,
-        __int128_t a2, __int128_t b2)
+static inline zw_t disc_monic(zw_t c0, zw_t c1, zw_t c2)
 {
-    return
-        /* a2/b2 degree-5 terms */
-        -8*a1*b1*a2*a2*a2   + 4*b1*b1*a2*a2*a2
-        + 16*b0*a2*a2*a2*a2
-        - 12*a1*a1*a2*a2*b2 + 24*a1*b1*a2*a2*b2
-        + 64*a0*a2*a2*a2*b2 - 64*b0*a2*a2*a2*b2
-        + 12*a1*a1*a2*b2*b2 - 12*b1*b1*a2*b2*b2
-        - 96*a0*a2*a2*b2*b2
-        - 8*a1*b1*b2*b2*b2  + 4*b1*b1*b2*b2*b2
-        + 64*b0*a2*b2*b2*b2
-        + 16*a0*b2*b2*b2*b2 - 16*b0*b2*b2*b2*b2
-        /* a1/b1 degree-4 terms */
-        - 108*a1*a1*a1*b1 + 162*a1*a1*b1*b1 - 27*b1*b1*b1*b1
-        /* mixed degree-4 terms */
-        + 288*a0*a1*b1*a2   - 144*a0*b1*b1*a2
-        - 256*a0*b0*a2*a2   + 128*b0*b0*a2*a2
-        - 288*b0*a1*b1*b2   + 144*b0*b1*b1*b2
-        + 256*a0*b0*b2*b2   - 128*b0*b0*b2*b2
-        /* a0/b0 degree-3 terms (from 256*x0^3 via im part) */
-        + 768*a0*a0*b0 - 768*a0*b0*b0
-        /* degree-3 cross terms */
-        - 128*a0*a0*b2 + 256*a0*b0*b2
-        + 144*a1*a1*b2 - 288*a1*b1*b2;
-}
-
-
-/* -----------------------------------------------------------------------
- * Format a curve as  x^4+(a2+b2*w)*x^2+(a1+b1*w)*x+(a0+b0*w)
- * Short form: [a0,b0,a1,b1,a2,b2]
- * ----------------------------------------------------------------------- */
-static inline void
-curve_string(char *buf, long a0, long b0, long a1, long b1, long a2, long b2)
-{
-    sprintf(buf, "[%ld,%ld,%ld,%ld,%ld,%ld]", a0, b0, a1, b1, a2, b2);
+    zw_t c0sq = zw_mul(c0,c0), c0cu = zw_mul(c0sq,c0);
+    zw_t c1sq = zw_mul(c1,c1), c1qu = zw_mul(c1sq,c1sq);
+    zw_t c2sq = zw_mul(c2,c2), c2cu = zw_mul(c2sq,c2), c2qu = zw_mul(c2cu,c2);
+    zw_t d = {0,0};
+    d = zw_add(d, zw_smul( 256, c0cu));
+    d = zw_sub(d, zw_smul( 128, zw_mul(c2sq, c0sq)));
+    d = zw_add(d, zw_smul( 144, zw_mul(c2, zw_mul(c1sq, c0))));
+    d = zw_sub(d, zw_smul(  27, c1qu));
+    d = zw_add(d, zw_smul(  16, zw_mul(c2qu, c0)));
+    d = zw_sub(d, zw_smul(   4, zw_mul(c2cu, c1sq)));
+    return d;
 }
 
 
@@ -172,17 +126,16 @@ int main(int argc, char *argv[])
         for (long a0 = -c; a0 <= c; a0++) {
         for (long b0 = -c; b0 <= c; b0++) {
 
-            __int128_t dr = disc_re(a0, b0, a1, b1, a2, b2);
-            __int128_t di = disc_im(a0, b0, a1, b1, a2, b2);
-            if (!dr && !di) continue;   /* degenerate (singular) curve */
+            zw_t c0={a0,b0}, c1={a1,b1}, c2={a2,b2};
+            zw_t disc = disc_monic(c0, c1, c2);
+            if (!disc.re && !disc.im) continue;   /* degenerate (singular) curve */
 
             /* N(u + v*omega) = u^2 - u*v + v^2  (always >= 0) */
-            __int128_t N = dr*dr - dr*di + di*di;
-            /* N is always >= 0, but guard just in case */
-            if (N <= 0 || N > (__int128_t)Nbnd) continue;
+            i128 N = zw_norm(disc);
+            if (N <= 0 || N > (i128)Nbnd) continue;
 
             char nbuf[64], cbuf[128];
-            curve_string(cbuf, a0, b0, a1, b1, a2, b2);
+            sprintf(cbuf, "[%ld,%ld,%ld,%ld,%ld,%ld]", a0, b0, a1, b1, a2, b2);
 
             #pragma omp critical(output)
             {

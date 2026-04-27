@@ -218,6 +218,166 @@ Found 2987 curves in 0.016 secs using 8 threads
 
 ---
 
+## General Version — Enumeration over Q(ζ₃) with arbitrary coefficients (`curves_zeta3/`)
+
+### What it does
+
+Searches for **all** Picard curves over `Q(ζ₃)` with general Eisenstein integer coefficients:
+
+```
+y³ = f(x),   f(x) = f4·x⁴ + f3·x³ + f2·x² + f1·x + f0,   fi = ai + bi·ω ∈ Z[ω]
+```
+
+This is the direct Q(ζ₃) analogue of the original `pdisc_box` — no restrictions on f4 or f3.
+
+### Symmetry reductions
+
+To avoid enumerating isomorphic curves twice:
+
+| Symmetry | Isomorphism | Normalization applied |
+|---|---|---|
+| `y → −y` | `f(x) ~ −f(x)`, i.e. `f4 ~ −f4` | Require f4 in positive half: `a4 > 0`, or `a4 = 0` and `b4 > 0` |
+| `x → −x` | `(f4,f3,f2,f1,f0) ~ (f4,−f3,f2,−f1,f0)` | Require f3 in positive half: `a3 > 0`, or `a3 = 0` and `b3 ≥ 0` |
+
+### Discriminant formula
+
+The classical 16-term discriminant formula for `f4·x⁴ + f3·x³ + f2·x²+ f1·x + f0` is evaluated entirely in `Z[ω]` using `__int128_t` arithmetic:
+
+```
+disc(f) = 256·f4³·f0³ − 192·f4²·f3·f1·f0² − 128·f4²·f2²·f0²
+        + 144·f4²·f2·f1²·f0 − 27·f4²·f1⁴ + 144·f4·f3²·f2·f0²
+        − 6·f4·f3²·f1²·f0 − 80·f4·f3·f2²·f1·f0 + 18·f4·f3·f2·f1³
+        + 16·f4·f2⁴·f0 − 4·f4·f2³·f1² − 27·f3⁴·f0²
+        + 18·f3³·f2·f1·f0 − 4·f3³·f1³ − 4·f3²·f2³·f0 + f3²·f2²·f1²
+```
+
+The output quantity is `N(disc(f)) = disc_re² − disc_re·disc_im + disc_im²`.
+
+### Compile
+
+```bash
+cd curves_zeta3
+gcc -O2 -fopenmp pdisc_box_zeta3_general.c -o pdisc_box_zeta3_general -lm
+```
+
+### Usage
+
+```bash
+cd curves_zeta3
+./pdisc_box_zeta3_general coeff-bound norm-bound [threads]
+```
+
+Example:
+```bash
+./pdisc_box_zeta3_general 2 1000000
+```
+
+Results are written **automatically** to files in the same directory as the executable — no shell redirection needed:
+
+| File | Contents |
+|---|---|
+| `results_zeta3_general.txt` | One curve per line |
+| `log_zeta3_general.txt` | Thread count, scan size, timing |
+
+### Output format (`results_zeta3_general.txt`)
+
+```
+# Picard curves over Q(zeta_3):  y^3 = f(x)
+# f(x) = f4*x^4 + f3*x^3 + f2*x^2 + f1*x + f0,  fi = ai+bi*w,  w = e^(2*pi*i/3)
+# Output format:  N(disc(f)):[a0,b0,a1,b1,a2,b2,a3,b3,a4,b4]
+N(disc(f)):[a0,b0,a1,b1,a2,b2,a3,b3,a4,b4]
+...
+```
+
+Example line:
+```
+729:[0,0,0,-1,0,0,0,0,1,0]
+```
+
+- **Left of `:`** — `N(disc(f))`, a positive integer
+- **Right of `:`** — the ten Eisenstein-integer parameters defining `f(x)`
+
+---
+
+## Fast General Version — Monomial Tree + Finite Differences (`curves_zeta3/`)
+
+A faster version of `pdisc_box_zeta3_general` for large coefficient searches (`c ≥ 5`).
+Uses the same two techniques as the rational `pdisc_box`. Design notes: `FAST_GENERAL_DESIGN.md`.
+
+### Key idea: disc is cubic in f0
+
+Regroup the 16-term quartic discriminant by power of f0:
+
+```
+disc(f) = P3·f0³ + P2·f0² + P1·f0 + P0
+```
+
+where P0…P3 ∈ Z[ω] depend only on (f1, f2, f3, f4):
+
+```
+P3 = 256·f4³
+
+P2 = -27·f3⁴ + (-128·f4²·f2² + 144·f4·f3²·f2) + (-192·f4²·f3)·f1
+
+P1 = (16·f4·f2⁴ - 4·f3²·f2³) + (144·f4²·f2 - 6·f4·f3²)·f1²
+   + (-80·f4·f3·f2² + 18·f3³·f2)·f1
+
+P0 = -27·f4²·f1⁴ + (18·f4·f3·f2 - 4·f3³)·f1³ + (-4·f4·f2³ + f3²·f2²)·f1²
+```
+
+For fixed b0, disc is cubic in the integer a0, enabling finite differences.
+
+### Speedups
+
+| Technique | Where applied | Saving |
+|---|---|---|
+| Monomial tree | Outer loops (f4→f3→f2→f1) | Cache P3, partial P2/P1/P0 at each level |
+| Finite differences | Innermost a0 loop | 3 `zw_t` additions per step vs ~16 multiplications |
+
+Measured speedup: **~16× faster** than `pdisc_box_zeta3_general` at c=4 (8 threads).
+
+### Compile
+
+```bash
+cd curves_zeta3
+gcc -O2 -fopenmp pdisc_box_zeta3_general_fast.c -o pdisc_box_zeta3_general_fast -lm
+```
+
+### Usage
+
+```bash
+cd curves_zeta3
+./pdisc_box_zeta3_general_fast coeff-bound norm-bound [threads]
+```
+
+Example:
+```bash
+./pdisc_box_zeta3_general_fast 4 1000000
+```
+
+Results written automatically to the same directory:
+
+| File | Contents |
+|---|---|
+| `results_zeta3_general_fast.txt` | One curve per line |
+| `log_zeta3_general_fast.txt` | Thread count, scan size, timing |
+
+### Output format
+
+Same as `pdisc_box_zeta3_general`:
+
+```
+# Picard curves over Q(zeta_3):  y^3 = f(x)
+# f(x) = f4*x^4 + f3*x^3 + f2*x^2 + f1*x + f0,  fi = ai+bi*w,  w = e^(2*pi*i/3)
+# Output format:  N(disc(f)):[a0,b0,a1,b1,a2,b2,a3,b3,a4,b4]
+N(disc(f)):[a0,b0,a1,b1,a2,b2,a3,b3,a4,b4]
+...
+```
+
+Same symmetry reductions as `pdisc_box_zeta3_general` (f4 and f3 positive-half normalisation).
+
+---
+
 ## Prerequisites (Ubuntu / WSL)
 
 ```bash
